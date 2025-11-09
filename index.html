@@ -173,7 +173,7 @@
                     .from('jobs')
                     .select('*')
                     .eq('assigned_to', currentUser.id)
-                    .neq('status', 'Completed')
+                    .in('status', ['Assigned', 'In Progress'])  // ← Only show these statuses
                     .order('date', {ascending: true})
                     .order('start_time', {ascending: true});
 

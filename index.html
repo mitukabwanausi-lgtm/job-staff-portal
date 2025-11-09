@@ -516,11 +516,11 @@
                         ` : ''}
 
                         ${job.photo_urls && job.photo_urls.length > 0 ? `
-                            <button onclick='openPhotoGallery(${JSON.stringify(job.photo_urls)})'
+                            <a href="${job.photo_urls[0]}" target="_blank" rel="noopener noreferrer"
                                 class="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
                                 <span class="material-icons">photo_library</span>
-                                Photos (${job.photo_urls.length})
-                            </button>
+                                View Photos
+                            </a>
                         ` : `
                             <div class="flex items-center justify-center gap-2 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg font-medium cursor-not-allowed">
                                 <span class="material-icons">hide_image</span>

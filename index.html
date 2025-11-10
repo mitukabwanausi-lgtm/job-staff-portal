@@ -447,7 +447,7 @@
 
             // Calculate GST and total if needed
             const price = parseFloat(job.price) || 0;
-            const gstAmount = job.price_includes_gst ? 0 : price * 0.15;
+            const gstAmount = job.price_includes_gst ? 0 : price * 0.10;
             const totalPrice = job.price_includes_gst ? price : price + gstAmount;
 
             // Format price display

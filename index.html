@@ -6,7 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Staff Portal - Job Viewer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         .photo-gallery {
@@ -449,7 +463,7 @@
             const jobJson = JSON.stringify(job).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
 
             return `
-                <div class="bg-white rounded-lg shadow-sm border-l-4 ${job.priority === 'Urgent' ? 'border-red-500' : job.priority === 'High' ? 'border-yellow-500' : 'border-gray-300'} p-6">
+                <div class="bg-white rounded-xl border border-gray-200 hover:shadow-md transition-shadow p-6" style="border-left: 3px solid ${job.priority === 'Urgent' ? '#ef4444' : job.priority === 'High' ? '#f59e0b' : '#e5e7eb'}">
                     <div class="flex items-center justify-between mb-4">
                         <span class="px-3 py-1 rounded-full text-xs font-medium border ${priorityColors[job.priority] || priorityColors['Normal']}">
                             ${job.priority || 'Normal'} Priority

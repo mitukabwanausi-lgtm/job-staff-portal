@@ -95,6 +95,13 @@
                         </label>
                     </div>
                 </div>
+                <div>
+                    <label
+                        class="flex items-center p-3 border border-gray-300 rounded-lg cursor-pointer hover:bg-gray-50">
+                        <input type="checkbox" id="requestReview" class="w-4 h-4 text-blue-600 rounded">
+                        <span class="ml-3 text-gray-900">😊 Happy customer - Request review</span>
+                    </label>
+                </div>
             </div>
             <div class="flex gap-3 mt-6">
                 <button onclick="closePaymentModal()"
@@ -231,14 +238,16 @@
 
         function closePaymentModal() {
             document.getElementById('paymentModal').classList.add('hidden');
+            document.getElementById('requestReview').checked = false;
             pendingCompletionJob = null;
         }
 
         async function submitCompletion() {
             const amountPaid = document.getElementById('amountPaid').value;
             const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
+            const requestReview = document.getElementById('requestReview').checked;
 
-            if (!amountPaid || amountPaid <= 0) {
+            if (amountPaid === '' || amountPaid === null || parseFloat(amountPaid) < 0) {
                 alert('Please enter a valid amount paid.');
                 return;
             }
@@ -256,6 +265,7 @@
                         status: 'Completed',
                         amount_paid: parseFloat(amountPaid),
                         payment_method: paymentMethod,
+                        request_review: requestReview,
                         actual_end_time: new Date().toISOString()
                     })
                     .eq('id', pendingCompletionJob.id);

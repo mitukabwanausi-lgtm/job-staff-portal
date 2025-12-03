@@ -116,6 +116,64 @@
         </div>
     </div>
 
+    <!-- Withdrawal Modal -->
+    <div id="withdrawalModal"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] flex flex-col">
+            <div class="p-6 border-b flex-shrink-0">
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-bold text-gray-900">Withdraw Items</h2>
+                    <button onclick="closeWithdrawalModal()" class="text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-6 overflow-y-auto flex-1">
+                <form id="withdrawalForm" onsubmit="handleWithdrawalSubmit(event)" class="space-y-4">
+                    <input type="hidden" id="withdrawal_job_id">
+
+                    <div class="bg-blue-50 p-4 rounded-lg mb-4">
+                        <div class="text-sm text-gray-600">Withdrawing for:</div>
+                        <div id="withdrawal_job_info" class="text-lg font-semibold text-gray-900"></div>
+                    </div>
+
+                    <div id="withdrawalItemsList" class="space-y-3">
+                        <!-- Items will be dynamically added here -->
+                    </div>
+
+                    <button type="button" onclick="addWithdrawalItemRow()"
+                        class="w-full px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 hover:border-blue-500 hover:text-blue-600 rounded-lg font-medium transition-colors flex items-center justify-center gap-2">
+                        <span class="material-icons">add</span>
+                        Add Another Item
+                    </button>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Notes (Optional)</label>
+                        <textarea id="withdrawal_notes" rows="2" class="w-full px-4 py-2 border rounded-lg"
+                            placeholder="Any additional notes..."></textarea>
+                    </div>
+                </form>
+            </div>
+
+            <div class="p-6 border-t flex-shrink-0">
+                <div class="flex gap-3">
+                    <button type="submit" form="withdrawalForm"
+                        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-6 rounded-lg">
+                        Record Withdrawal
+                    </button>
+                    <button type="button" onclick="closeWithdrawalModal()"
+                        class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-3 px-6 rounded-lg">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Photo Gallery Modal -->
     <div id="photoGallery" class="photo-gallery">
         <div class="flex flex-col items-center justify-center w-full h-full p-4">
@@ -144,6 +202,7 @@
         let pendingCompletionJob = null;
         let currentPhotoIndex = 0;
         let currentPhotos = [];
+        let inventoryItems = [];
 
         // ==================== AUTHENTICATION ====================
         async function login(username, password) {
@@ -206,6 +265,22 @@
                 updateLastRefreshTime();
             } catch (error) {
                 console.error('Error loading jobs:', error);
+            }
+        }
+
+        async function loadInventoryItems() {
+            try {
+                const {data, error} = await supabase
+                    .from('inventory_items')
+                    .select('*')
+                    .eq('active', true)
+                    .order('category', {ascending: true})
+                    .order('item_name', {ascending: true});
+
+                if (error) throw error;
+                inventoryItems = data || [];
+            } catch (error) {
+                console.error('Error loading inventory items:', error);
             }
         }
 
@@ -277,6 +352,175 @@
             } catch (error) {
                 console.error('Error completing job:', error);
                 alert('Failed to complete job. Please try again.');
+            }
+        }
+
+        // ==================== INVENTORY WITHDRAWAL ====================
+        let withdrawalItemCounter = 0;
+
+        function openWithdrawalModal(job) {
+            if (inventoryItems.length === 0) {
+                alert('No inventory items available. Please contact your manager.');
+                return;
+            }
+
+            document.getElementById('withdrawal_job_id').value = job.id;
+            document.getElementById('withdrawal_job_info').textContent =
+                `Job #${jobs.indexOf(job) + 1} - ${job.client_name}`;
+            document.getElementById('withdrawal_notes').value = '';
+
+            // Clear previous items
+            document.getElementById('withdrawalItemsList').innerHTML = '';
+            withdrawalItemCounter = 0;
+
+            // Add first item row
+            addWithdrawalItemRow();
+
+            document.getElementById('withdrawalModal').classList.remove('hidden');
+        }
+
+        function closeWithdrawalModal() {
+            document.getElementById('withdrawalModal').classList.add('hidden');
+        }
+
+        function addWithdrawalItemRow() {
+            const rowId = withdrawalItemCounter++;
+            const container = document.getElementById('withdrawalItemsList');
+
+            // Group items by category for easier selection
+            const itemsByCategory = {};
+            inventoryItems.forEach(item => {
+                if (!itemsByCategory[item.category]) {
+                    itemsByCategory[item.category] = [];
+                }
+                itemsByCategory[item.category].push(item);
+            });
+
+            // Build options with categories
+            let optionsHtml = '<option value="">Select item...</option>';
+            Object.keys(itemsByCategory).sort().forEach(category => {
+                optionsHtml += `<optgroup label="${category}">`;
+                itemsByCategory[category].forEach(item => {
+                    optionsHtml += `<option value="${item.id}" data-unit="${item.unit_of_measurement}">${item.item_name} (${item.current_stock} ${item.unit_of_measurement} available)</option>`;
+                });
+                optionsHtml += '</optgroup>';
+            });
+
+            const rowHtml = `
+        <div id="withdrawal_row_${rowId}" class="p-4 border border-gray-200 rounded-lg bg-gray-50">
+            <div class="flex justify-between items-start mb-3">
+                <span class="text-sm font-medium text-gray-700">Item ${rowId + 1}</span>
+                ${rowId > 0 ? `
+                    <button type="button" onclick="removeWithdrawalItemRow(${rowId})" 
+                        class="text-red-600 hover:text-red-800">
+                        <span class="material-icons" style="font-size: 18px;">delete</span>
+                    </button>
+                ` : ''}
+            </div>
+            <div class="space-y-3">
+                <select id="item_${rowId}" onchange="updateWithdrawalUnit(${rowId})" required 
+                    class="w-full px-3 py-2 border rounded-lg text-sm">
+                    ${optionsHtml}
+                </select>
+                <div class="flex gap-2">
+                    <input type="number" step="0.01" id="quantity_${rowId}" required 
+                        placeholder="Quantity" 
+                        class="flex-1 px-3 py-2 border rounded-lg text-sm">
+                    <span id="unit_${rowId}" class="px-3 py-2 bg-gray-100 border border-gray-300 rounded-lg text-sm text-gray-600 min-w-[60px] text-center">
+                        unit
+                    </span>
+                </div>
+            </div>
+        </div>
+    `;
+
+            container.insertAdjacentHTML('beforeend', rowHtml);
+        }
+
+        function removeWithdrawalItemRow(rowId) {
+            const row = document.getElementById(`withdrawal_row_${rowId}`);
+            if (row) {
+                row.remove();
+            }
+        }
+
+        function updateWithdrawalUnit(rowId) {
+            const select = document.getElementById(`item_${rowId}`);
+            const unitSpan = document.getElementById(`unit_${rowId}`);
+
+            if (select.value) {
+                const selectedOption = select.options[select.selectedIndex];
+                const unit = selectedOption.getAttribute('data-unit');
+                unitSpan.textContent = unit || 'unit';
+            } else {
+                unitSpan.textContent = 'unit';
+            }
+        }
+
+        async function handleWithdrawalSubmit(e) {
+            e.preventDefault();
+
+            const jobId = document.getElementById('withdrawal_job_id').value;
+            const notes = document.getElementById('withdrawal_notes').value || null;
+
+            // Collect all withdrawal items
+            const withdrawals = [];
+            const rows = document.querySelectorAll('[id^="withdrawal_row_"]');
+
+            rows.forEach((row, index) => {
+                const rowId = row.id.split('_')[2];
+                const itemId = document.getElementById(`item_${rowId}`).value;
+                const quantity = parseFloat(document.getElementById(`quantity_${rowId}`).value);
+
+                if (itemId && quantity > 0) {
+                    withdrawals.push({
+                        staff_id: currentUser.id,
+                        job_id: jobId,
+                        item_id: itemId,
+                        quantity_withdrawn: quantity,
+                        notes: notes,
+                        withdrawal_date: new Date().toISOString()
+                    });
+                }
+            });
+
+            if (withdrawals.length === 0) {
+                alert('Please add at least one item to withdraw.');
+                return;
+            }
+
+            try {
+                // Insert all withdrawals
+                const {error: withdrawalError} = await supabase
+                    .from('inventory_withdrawals')
+                    .insert(withdrawals);
+
+                if (withdrawalError) throw withdrawalError;
+
+                // Update stock levels for each item
+                for (const withdrawal of withdrawals) {
+                    const item = inventoryItems.find(i => i.id === withdrawal.item_id);
+                    if (item) {
+                        const newStock = item.current_stock - withdrawal.quantity_withdrawn;
+
+                        const {error: updateError} = await supabase
+                            .from('inventory_items')
+                            .update({
+                                current_stock: newStock,
+                                updated_at: new Date().toISOString()
+                            })
+                            .eq('id', withdrawal.item_id);
+
+                        if (updateError) throw updateError;
+                    }
+                }
+
+                alert(`Successfully recorded withdrawal of ${withdrawals.length} item(s)!`);
+                closeWithdrawalModal();
+                await loadInventoryItems(); // Refresh inventory
+            } catch (error) {
+                console.error('Error recording withdrawal:', error);
+                alert('Failed to record withdrawal: ' + error.message);
             }
         }
 
@@ -568,6 +812,11 @@
                                 Mark Complete
                             </button>
                         ` : ''}
+                        <button onclick='openWithdrawalModal(${jobJson})'
+                            class="col-span-2 flex items-center justify-center gap-2 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg font-medium transition-colors">
+                            <span class="material-icons">inventory</span>
+                            Withdraw Items
+                        </button>
                     </div>
                 </div>
             `;
@@ -607,6 +856,7 @@
             checkAuth();
             if (currentUser) {
                 await loadJobs();
+                await loadInventoryItems();  // ← Add this line
             }
             renderApp();
 

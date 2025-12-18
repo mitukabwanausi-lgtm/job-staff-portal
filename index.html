@@ -141,7 +141,7 @@
         let pendingCompletionJob = null;
         let currentPhotoIndex = 0;
         let currentPhotos = [];
-        let supabase; // This will hold the Supabase client instance
+        let supabaseClient;
 
         // ==================== INITIALIZATION ====================
         function initializeApp() {
@@ -153,7 +153,7 @@
             }
 
             // Initialize Supabase client
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
             console.log('Supabase initialized successfully');
 
             // Check authentication and load data
@@ -184,7 +184,7 @@
         // ==================== AUTHENTICATION ====================
         async function login(username, password) {
             try {
-                const {data, error} = await supabase
+                const {data, error} = await supabaseClient
                     .from('staff')
                     .select('*')
                     .eq('username', username)
@@ -224,14 +224,14 @@
 
         // ==================== DATA LOADING ====================
         async function loadJobs() {
-            if (!currentUser || !supabase) return;
+            if (!currentUser || !supabaseClient) return;
 
             try {
-                const {data, error} = await supabase
+                const {data, error} = await supabaseClient
                     .from('jobs')
                     .select('*')
                     .eq('assigned_to', currentUser.id)
-                    .in('status', ['Assigned', 'In Progress'])  // ← Only show these statuses
+                    .in('status', ['Assigned', 'In Progress'])
                     .order('date', {ascending: true})
                     .order('start_time', {ascending: true});
 
@@ -249,7 +249,7 @@
         // ==================== JOB OPERATIONS ====================
         async function startJob(jobId) {
             try {
-                const {error} = await supabase
+                const {error} = await supabaseClient
                     .from('jobs')
                     .update({
                         status: 'In Progress',
@@ -296,7 +296,7 @@
             }
 
             try {
-                const {error} = await supabase
+                const {error} = await supabaseClient
                     .from('jobs')
                     .update({
                         status: 'Completed',

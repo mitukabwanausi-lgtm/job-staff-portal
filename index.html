@@ -132,10 +132,8 @@
 
     <script>
         // ==================== CONFIGURATION ====================
-        const SUPABASE_URL = 'https://ssxcjsdoxtgddnkugntl.supabaseClient.co';
+        const SUPABASE_URL = 'https://ssxcjsdoxtgddnkugntl.supabase.co';
         const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNzeGNqc2RveHRnZGRua3VnbnRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE3NDEwODgsImV4cCI6MjA3NzMxNzA4OH0.C-lkPRJtFYa7YAgPavXRIGvV1LPkCXOJQYoVrZ4nCMw';
-
-        const supabaseClient = window.supabaseClient.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         // ==================== STATE MANAGEMENT ====================
         let currentUser = null;
@@ -143,6 +141,43 @@
         let pendingCompletionJob = null;
         let currentPhotoIndex = 0;
         let currentPhotos = [];
+        let supabase; // Declare supabase variable (will initialize later)
+
+        // ==================== INITIALIZATION ====================
+        async function initializeApp() {
+            try {
+                // Check if Supabase is loaded
+                if (!window.supabase) {
+                    console.error('Supabase library not loaded');
+                    alert('Failed to load application. Please refresh the page.');
+                    return;
+                }
+
+                // Initialize Supabase client
+                supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                console.log('Supabase initialized successfully');
+
+                // Check authentication and load data
+                checkAuth();
+                if (currentUser) {
+                    await loadJobs();
+                }
+                renderApp();
+
+                // Auto-refresh jobs every 2 minutes
+                if (currentUser) {
+                    setInterval(async () => {
+                        await loadJobs();
+                    }, 120000);
+                }
+            } catch (error) {
+                console.error('Failed to initialize app:', error);
+                alert('Failed to load application. Please refresh the page.');
+            }
+        }
+
+        // Start the app when the page loads
+        document.addEventListener('DOMContentLoaded', initializeApp);
 
         // ==================== AUTHENTICATION ====================
         async function login(username, password) {
@@ -278,6 +313,7 @@
                 alert('Failed to complete job. Please try again.');
             }
         }
+
         // ==================== PHOTO GALLERY ====================
         function openPhotoGallery(photoUrls) {
             if (!photoUrls || photoUrls.length === 0) {
@@ -543,11 +579,11 @@
                         ` : ''}
 
                         ${job.photo_urls && job.photo_urls.length > 0 ? `
-                            <a href="${job.photo_urls[0]}" target="_blank" rel="noopener noreferrer"
+                            <button onclick="openPhotoGallery(${JSON.stringify(job.photo_urls)})"
                                 class="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
                                 <span class="material-icons">photo_library</span>
                                 View Photos
-                            </a>
+                            </button>
                         ` : `
                             <div class="flex items-center justify-center gap-2 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg font-medium cursor-not-allowed">
                                 <span class="material-icons">hide_image</span>
@@ -591,7 +627,6 @@
             await login(username, password);
         }
 
-        // ==================== INITIALIZATION ====================
         async function handleRefresh() {
             const icon = document.getElementById('refreshIcon');
             if (icon) {
@@ -604,25 +639,4 @@
                 }
             }, 1000);
         }
-
-        async function initialize() {
-            checkAuth();
-            if (currentUser) {
-                await loadJobs();
-            }
-            renderApp();
-
-            // Auto-refresh jobs every 2 minutes
-            if (currentUser) {
-                setInterval(async () => {
-                    await loadJobs();
-                }, 120000);
-            }
-        }
-
-        // Start the app
-        initialize();
     </script>
-</body>
-
-</html>

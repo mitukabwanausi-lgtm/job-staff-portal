@@ -394,38 +394,57 @@
                     return null;
                 }
 
-                // Check if it's a Google Drive URL
+                // Handle Google Photos URLs
+                if (url.includes('photos.google.com')) {
+                    console.log('Detected Google Photos URL');
+
+                    // Try to extract the photo ID from Google Photos share link
+                    // This is a workaround - Google Photos doesn't provide direct links easily
+                    const urlObj = new URL(url);
+                    const pathSegments = urlObj.pathname.split('/');
+
+                    // Google Photos share URLs have patterns like:
+                    // /share/AF1QipMPd2voVBfLdI5AIkWpZljwQREfNKcXFTuxL1reWTN8YmQsfYnis5EpL_SsCtiGTg
+                    // We'll use the share ID and display in an iframe
+
+                    // We'll return the original URL and handle it specially in displayPhoto
+                    return {
+                        url: url,
+                        type: 'google_photos',
+                        originalUrl: url
+                    };
+                }
+
+                // Handle Google Drive URLs
                 if (url.includes('drive.google.com')) {
                     console.log('Detected Google Drive URL');
 
-                    // Try multiple Google Drive URL formats
                     let fileId = null;
-
-                    // Format 1: https://drive.google.com/file/d/FILE_ID/view
                     const match1 = url.match(/\/d\/([^/]+)/);
-                    if (match1) {
-                        fileId = match1[1];
-                    }
-
-                    // Format 2: https://drive.google.com/open?id=FILE_ID
                     const match2 = url.match(/[?&]id=([^&]+)/);
-                    if (match2) {
-                        fileId = match2[1];
-                    }
+
+                    if (match1) fileId = match1[1];
+                    else if (match2) fileId = match2[1];
 
                     if (fileId) {
                         const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
                         console.log('Converted to direct URL:', directUrl);
-                        return directUrl;
-                    } else {
-                        console.warn('Could not extract Google Drive file ID from:', url);
-                        return url; // Return original URL as fallback
+                        return {
+                            url: directUrl,
+                            type: 'image',
+                            originalUrl: url
+                        };
                     }
                 }
 
-                console.log('Returning original URL:', url);
-                return url;
-            }).filter(url => url !== null); // Filter out null URLs
+                // Regular image URLs
+                console.log('Regular image URL:', url);
+                return {
+                    url: url,
+                    type: 'image',
+                    originalUrl: url
+                };
+            }).filter(item => item !== null);
 
             console.log('Final currentPhotos:', currentPhotos);
 
@@ -449,34 +468,60 @@
             const content = document.getElementById('galleryContent');
             const controls = document.getElementById('galleryControls');
 
-            const currentPhoto = currentPhotos[currentPhotoIndex];
-            console.log('Displaying photo:', currentPhoto);
+            const currentItem = currentPhotos[currentPhotoIndex];
+            console.log('Displaying item:', currentItem);
 
-            content.innerHTML = `
-        <div class="relative">
-            <img src="${currentPhoto}" alt="Job Photo" 
-                class="rounded-lg shadow-2xl max-w-full max-h-[80vh]"
-                onerror="handleImageError(this)">
-            <div id="imageError" class="hidden mt-2 text-center text-red-400">
-                Failed to load image. Please check the URL.
-            </div>
-        </div>
-    `;
+            if (currentItem.type === 'google_photos') {
+                // For Google Photos, use an iframe
+                content.innerHTML = `
+                    <div class="w-full h-full flex flex-col items-center justify-center">
+                        <iframe 
+                            src="${currentItem.url}" 
+                            class="w-full h-[80vh] border-0 rounded-lg"
+                            frameborder="0"
+                            allowfullscreen
+                            sandbox="allow-scripts allow-same-origin allow-popups">
+                        </iframe>
+                        <p class="text-white mt-2 text-sm">
+                            Google Photos Viewer
+                            <button onclick="window.open('${currentItem.originalUrl}', '_blank')" 
+                                class="ml-2 text-blue-300 underline">
+                                Open in new tab
+                            </button>
+                        </p>
+                    </div>
+                `;
+            } else if (currentItem.type === 'image') {
+                // For regular images
+                content.innerHTML = `
+                    <div class="relative">
+                        <img src="${currentItem.url}" alt="Job Photo" 
+                            class="rounded-lg shadow-2xl max-w-full max-h-[80vh] object-contain"
+                            onerror="handleImageError(this)"
+                            onload="console.log('Image loaded successfully')">
+                        <div id="imageError" class="hidden mt-2 text-center text-red-400">
+                            Failed to load image. 
+                            <button onclick="window.open('${currentItem.originalUrl}', '_blank')" 
+                                class="underline">Open in new tab</button>
+                        </div>
+                    </div>
+                `;
+            }
 
             if (currentPhotos.length > 1) {
                 controls.innerHTML = `
-            <button onclick="previousPhoto()" 
-                class="bg-white text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 ${currentPhotoIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}">
-                ← Previous
-            </button>
-            <span class="text-white font-medium">
-                ${currentPhotoIndex + 1} / ${currentPhotos.length}
-            </span>
-            <button onclick="nextPhoto()" 
-                class="bg-white text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 ${currentPhotoIndex === currentPhotos.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}">
-                Next →
-            </button>
-        `;
+                    <button onclick="previousPhoto()" 
+                        class="bg-white text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 ${currentPhotoIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}">
+                        ← Previous
+                    </button>
+                    <span class="text-white font-medium">
+                        ${currentPhotoIndex + 1} / ${currentPhotos.length}
+                    </span>
+                    <button onclick="nextPhoto()" 
+                        class="bg-white text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 ${currentPhotoIndex === currentPhotos.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}">
+                        Next →
+                    </button>
+                `;
             } else {
                 controls.innerHTML = '';
             }

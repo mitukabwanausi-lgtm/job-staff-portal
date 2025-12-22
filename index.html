@@ -111,8 +111,8 @@
                     class="flex-1 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-medium transition-colors">
                     Cancel
                 </button>
-                <button onclick="submitCompletion()"
-                    class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors">
+                <button onclick="submitCompletion(event)" id="completeJobButton"
+                    class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
                     Complete Job
                 </button>
             </div>
@@ -145,6 +145,7 @@
         let currentPhotoIndex = 0;
         let currentPhotos = [];
         let supabaseClient;
+        let isSubmittingCompletion = false;  // NEW: Prevent double submission
 
         // ==================== INITIALIZATION ====================
         function initializeApp() {
@@ -161,6 +162,7 @@
 
             // Check authentication and load data
             checkAuth();
+
             if (currentUser) {
                 loadJobs().then(() => {
                     renderApp();
@@ -285,9 +287,17 @@
             document.getElementById('paymentModal').classList.add('hidden');
             document.getElementById('requestReview').checked = false;
             pendingCompletionJob = null;
+            isSubmittingCompletion = false; // Reset flag when closing
         }
 
-        async function submitCompletion() {
+        // FIXED: Improved job completion with proper state management
+        async function submitCompletion(event) {
+            // Prevent double submission
+            if (isSubmittingCompletion) {
+                console.log('Submission already in progress');
+                return;
+            }
+
             const amountPaid = document.getElementById('amountPaid').value;
             const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
             const requestReview = document.getElementById('requestReview').checked;
@@ -303,8 +313,18 @@
                 return;
             }
 
+            // Set submission flag and disable button
+            isSubmittingCompletion = true;
+            const submitButton = document.getElementById('completeJobButton');
+            const originalText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<span class="material-icons spin">sync</span> Processing...';
+
             try {
-                const {error} = await supabaseClient
+                console.log('Starting job completion for job:', pendingCompletionJob.id);
+
+                // Single update with all fields
+                const {data, error} = await supabaseClient
                     .from('jobs')
                     .update({
                         status: 'Completed',
@@ -313,22 +333,45 @@
                         request_review: requestReview,
                         actual_end_time: new Date().toISOString()
                     })
-                    .eq('id', pendingCompletionJob.id);
+                    .eq('id', pendingCompletionJob.id)
+                    .select()
+                    .single();
 
-                if (error) throw error;
+                if (error) {
+                    console.error('Database error:', error);
+                    throw error;
+                }
 
+                console.log('Job completed successfully:', data);
+
+                // Show success message
+                alert('Job completed successfully!');
+
+                // Close modal first
                 closePaymentModal();
+
+                // Then reload jobs
                 await loadJobs();
+
+                // Render updated view
+                renderApp();
+
             } catch (error) {
                 console.error('Error completing job:', error);
-                alert('Failed to complete job. Please try again.');
+                alert('Failed to complete job: ' + error.message + '\n\nPlease try again or contact support if the problem persists.');
+
+                // Re-enable button on error
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalText;
+            } finally {
+                // Always reset the submission flag
+                isSubmittingCompletion = false;
             }
         }
 
-        // ==================== PHOTO GALLERY ====================
+        // ==================== PHOTO GALLERY (FIXED) ====================
 
         function handleViewPhotos(jobId) {
-            // Find the job in the current jobs array
             const job = jobs.find(j => j.id === jobId);
 
             if (!job) {
@@ -336,122 +379,28 @@
                 return;
             }
 
-            console.log('=== DEBUG: Photo Gallery ===');
-            console.log('Job found:', job);
-            console.log('Job ID:', job.id);
             console.log('Photo URLs:', job.photo_urls);
-            console.log('Type of photo_urls:', typeof job.photo_urls);
-            console.log('Is array?', Array.isArray(job.photo_urls));
 
-            // Check if photo_urls exists and is an array
-            if (!job.photo_urls) {
-                console.error('Photo URLs is undefined or null');
+            if (!job.photo_urls || !Array.isArray(job.photo_urls) || job.photo_urls.length === 0) {
                 alert('No photos available for this job.');
                 return;
             }
-
-            if (!Array.isArray(job.photo_urls)) {
-                console.error('Photo URLs is not an array:', job.photo_urls);
-                // Try to convert string to array if it's a string
-                if (typeof job.photo_urls === 'string') {
-                    try {
-                        const parsed = JSON.parse(job.photo_urls);
-                        job.photo_urls = parsed;
-                        console.log('Parsed string to array:', parsed);
-                    } catch (e) {
-                        console.error('Failed to parse string:', e);
-                    }
-                }
-            }
-
-            if (!Array.isArray(job.photo_urls) || job.photo_urls.length === 0) {
-                alert('No photos available for this job.');
-                return;
-            }
-
-            console.log('First photo URL:', job.photo_urls[0]);
-            console.log('=== END DEBUG ===');
 
             openPhotoGallery(job.photo_urls);
         }
 
         function openPhotoGallery(photoUrls) {
-            console.log('=== DEBUG: Opening Gallery ===');
-            console.log('Received URLs:', photoUrls);
-
             if (!photoUrls || photoUrls.length === 0) {
-                console.error('No photo URLs provided');
                 alert('No photos available for this job.');
                 return;
             }
 
-            // Process each URL
-            currentPhotos = photoUrls.map((url, index) => {
-                console.log(`Processing URL ${index + 1}:`, url);
-
-                if (!url) {
-                    console.warn(`URL ${index + 1} is null or undefined`);
-                    return null;
-                }
-
-                // Handle Google Photos URLs
-                if (url.includes('photos.google.com')) {
-                    console.log('Detected Google Photos URL');
-
-                    // Try to extract the photo ID from Google Photos share link
-                    // This is a workaround - Google Photos doesn't provide direct links easily
-                    const urlObj = new URL(url);
-                    const pathSegments = urlObj.pathname.split('/');
-
-                    // Google Photos share URLs have patterns like:
-                    // /share/AF1QipMPd2voVBfLdI5AIkWpZljwQREfNKcXFTuxL1reWTN8YmQsfYnis5EpL_SsCtiGTg
-                    // We'll use the share ID and display in an iframe
-
-                    // We'll return the original URL and handle it specially in displayPhoto
-                    return {
-                        url: url,
-                        type: 'google_photos',
-                        originalUrl: url
-                    };
-                }
-
-                // Handle Google Drive URLs
-                if (url.includes('drive.google.com')) {
-                    console.log('Detected Google Drive URL');
-
-                    let fileId = null;
-                    const match1 = url.match(/\/d\/([^/]+)/);
-                    const match2 = url.match(/[?&]id=([^&]+)/);
-
-                    if (match1) fileId = match1[1];
-                    else if (match2) fileId = match2[1];
-
-                    if (fileId) {
-                        const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
-                        console.log('Converted to direct URL:', directUrl);
-                        return {
-                            url: directUrl,
-                            type: 'image',
-                            originalUrl: url
-                        };
-                    }
-                }
-
-                // Regular image URLs
-                console.log('Regular image URL:', url);
-                return {
-                    url: url,
-                    type: 'image',
-                    originalUrl: url
-                };
-            }).filter(item => item !== null);
-
-            console.log('Final currentPhotos:', currentPhotos);
-
-            if (currentPhotos.length === 0) {
-                alert('No valid photo URLs found.');
-                return;
-            }
+            // Simple mapping - all URLs from Supabase Storage are direct image URLs
+            currentPhotos = photoUrls.map(url => ({
+                url: url,
+                type: 'image',
+                originalUrl: url
+            }));
 
             currentPhotoIndex = 0;
             displayPhoto();
@@ -469,44 +418,21 @@
             const controls = document.getElementById('galleryControls');
 
             const currentItem = currentPhotos[currentPhotoIndex];
-            console.log('Displaying item:', currentItem);
 
-            if (currentItem.type === 'google_photos') {
-                // For Google Photos, use an iframe
-                content.innerHTML = `
-                    <div class="w-full h-full flex flex-col items-center justify-center">
-                        <iframe 
-                            src="${currentItem.url}" 
-                            class="w-full h-[80vh] border-0 rounded-lg"
-                            frameborder="0"
-                            allowfullscreen
-                            sandbox="allow-scripts allow-same-origin allow-popups">
-                        </iframe>
-                        <p class="text-white mt-2 text-sm">
-                            Google Photos Viewer
-                            <button onclick="window.open('${currentItem.originalUrl}', '_blank')" 
-                                class="ml-2 text-blue-300 underline">
-                                Open in new tab
-                            </button>
-                        </p>
+            // Display regular image
+            content.innerHTML = `
+                <div class="relative">
+                    <img src="${currentItem.url}" alt="Job Photo" 
+                        class="rounded-lg shadow-2xl max-w-full max-h-[80vh] object-contain"
+                        onerror="handleImageError(this)"
+                        onload="console.log('Image loaded successfully')">
+                    <div id="imageError" class="hidden mt-2 text-center text-red-400">
+                        Failed to load image. 
+                        <button onclick="window.open('${currentItem.originalUrl}', '_blank')" 
+                            class="underline">Open in new tab</button>
                     </div>
-                `;
-            } else if (currentItem.type === 'image') {
-                // For regular images
-                content.innerHTML = `
-                    <div class="relative">
-                        <img src="${currentItem.url}" alt="Job Photo" 
-                            class="rounded-lg shadow-2xl max-w-full max-h-[80vh] object-contain"
-                            onerror="handleImageError(this)"
-                            onload="console.log('Image loaded successfully')">
-                        <div id="imageError" class="hidden mt-2 text-center text-red-400">
-                            Failed to load image. 
-                            <button onclick="window.open('${currentItem.originalUrl}', '_blank')" 
-                                class="underline">Open in new tab</button>
-                        </div>
-                    </div>
-                `;
-            }
+                </div>
+            `;
 
             if (currentPhotos.length > 1) {
                 controls.innerHTML = `
@@ -527,18 +453,12 @@
             }
         }
 
-        // Add this function to handle image loading errors
         function handleImageError(imgElement) {
             console.error('Image failed to load:', imgElement.src);
             const errorDiv = document.getElementById('imageError');
             if (errorDiv) {
                 errorDiv.classList.remove('hidden');
             }
-
-            // Optionally: try to open the URL in a new tab as a fallback
-            setTimeout(() => {
-                console.log('Attempting to open in new tab as fallback:', imgElement.src);
-            }, 1000);
         }
 
         function previousPhoto() {

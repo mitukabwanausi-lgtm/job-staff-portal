@@ -336,43 +336,98 @@
                 return;
             }
 
+            console.log('=== DEBUG: Photo Gallery ===');
             console.log('Job found:', job);
+            console.log('Job ID:', job.id);
             console.log('Photo URLs:', job.photo_urls);
+            console.log('Type of photo_urls:', typeof job.photo_urls);
+            console.log('Is array?', Array.isArray(job.photo_urls));
 
             // Check if photo_urls exists and is an array
-            if (!job.photo_urls || !Array.isArray(job.photo_urls)) {
-                console.error('Photo URLs is not an array or is undefined:', job.photo_urls);
+            if (!job.photo_urls) {
+                console.error('Photo URLs is undefined or null');
                 alert('No photos available for this job.');
                 return;
             }
 
-            if (job.photo_urls.length === 0) {
+            if (!Array.isArray(job.photo_urls)) {
+                console.error('Photo URLs is not an array:', job.photo_urls);
+                // Try to convert string to array if it's a string
+                if (typeof job.photo_urls === 'string') {
+                    try {
+                        const parsed = JSON.parse(job.photo_urls);
+                        job.photo_urls = parsed;
+                        console.log('Parsed string to array:', parsed);
+                    } catch (e) {
+                        console.error('Failed to parse string:', e);
+                    }
+                }
+            }
+
+            if (!Array.isArray(job.photo_urls) || job.photo_urls.length === 0) {
                 alert('No photos available for this job.');
                 return;
             }
+
+            console.log('First photo URL:', job.photo_urls[0]);
+            console.log('=== END DEBUG ===');
 
             openPhotoGallery(job.photo_urls);
         }
 
         function openPhotoGallery(photoUrls) {
-            console.log('Opening gallery with URLs:', photoUrls);
+            console.log('=== DEBUG: Opening Gallery ===');
+            console.log('Received URLs:', photoUrls);
 
             if (!photoUrls || photoUrls.length === 0) {
+                console.error('No photo URLs provided');
                 alert('No photos available for this job.');
                 return;
             }
 
-            currentPhotos = photoUrls.map(url => {
-                // Convert Google Drive share links to direct image links
-                if (url && url.includes('drive.google.com/file/d/')) {
-                    const match = url.match(/\/d\/([^/]+)/);
-                    if (match) {
-                        const fileId = match[1];
-                        return `https://drive.google.com/uc?export=view&id=${fileId}`;
+            // Process each URL
+            currentPhotos = photoUrls.map((url, index) => {
+                console.log(`Processing URL ${index + 1}:`, url);
+
+                if (!url) {
+                    console.warn(`URL ${index + 1} is null or undefined`);
+                    return null;
+                }
+
+                // Check if it's a Google Drive URL
+                if (url.includes('drive.google.com')) {
+                    console.log('Detected Google Drive URL');
+
+                    // Try multiple Google Drive URL formats
+                    let fileId = null;
+
+                    // Format 1: https://drive.google.com/file/d/FILE_ID/view
+                    const match1 = url.match(/\/d\/([^/]+)/);
+                    if (match1) {
+                        fileId = match1[1];
+                    }
+
+                    // Format 2: https://drive.google.com/open?id=FILE_ID
+                    const match2 = url.match(/[?&]id=([^&]+)/);
+                    if (match2) {
+                        fileId = match2[1];
+                    }
+
+                    if (fileId) {
+                        const directUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+                        console.log('Converted to direct URL:', directUrl);
+                        return directUrl;
+                    } else {
+                        console.warn('Could not extract Google Drive file ID from:', url);
+                        return url; // Return original URL as fallback
                     }
                 }
+
+                console.log('Returning original URL:', url);
                 return url;
-            }).filter(url => url); // Filter out any null/undefined URLs
+            }).filter(url => url !== null); // Filter out null URLs
+
+            console.log('Final currentPhotos:', currentPhotos);
 
             if (currentPhotos.length === 0) {
                 alert('No valid photo URLs found.');
@@ -394,28 +449,51 @@
             const content = document.getElementById('galleryContent');
             const controls = document.getElementById('galleryControls');
 
+            const currentPhoto = currentPhotos[currentPhotoIndex];
+            console.log('Displaying photo:', currentPhoto);
+
             content.innerHTML = `
-                <img src="${currentPhotos[currentPhotoIndex]}" alt="Job Photo" 
-                    class="rounded-lg shadow-2xl">
-            `;
+        <div class="relative">
+            <img src="${currentPhoto}" alt="Job Photo" 
+                class="rounded-lg shadow-2xl max-w-full max-h-[80vh]"
+                onerror="handleImageError(this)">
+            <div id="imageError" class="hidden mt-2 text-center text-red-400">
+                Failed to load image. Please check the URL.
+            </div>
+        </div>
+    `;
 
             if (currentPhotos.length > 1) {
                 controls.innerHTML = `
-                    <button onclick="previousPhoto()" 
-                        class="bg-white text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 ${currentPhotoIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}">
-                        ← Previous
-                    </button>
-                    <span class="text-white font-medium">
-                        ${currentPhotoIndex + 1} / ${currentPhotos.length}
-                    </span>
-                    <button onclick="nextPhoto()" 
-                        class="bg-white text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 ${currentPhotoIndex === currentPhotos.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}">
-                        Next →
-                    </button>
-                `;
+            <button onclick="previousPhoto()" 
+                class="bg-white text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 ${currentPhotoIndex === 0 ? 'opacity-50 cursor-not-allowed' : ''}">
+                ← Previous
+            </button>
+            <span class="text-white font-medium">
+                ${currentPhotoIndex + 1} / ${currentPhotos.length}
+            </span>
+            <button onclick="nextPhoto()" 
+                class="bg-white text-gray-900 px-4 py-2 rounded-lg hover:bg-gray-100 ${currentPhotoIndex === currentPhotos.length - 1 ? 'opacity-50 cursor-not-allowed' : ''}">
+                Next →
+            </button>
+        `;
             } else {
                 controls.innerHTML = '';
             }
+        }
+
+        // Add this function to handle image loading errors
+        function handleImageError(imgElement) {
+            console.error('Image failed to load:', imgElement.src);
+            const errorDiv = document.getElementById('imageError');
+            if (errorDiv) {
+                errorDiv.classList.remove('hidden');
+            }
+
+            // Optionally: try to open the URL in a new tab as a fallback
+            setTimeout(() => {
+                console.log('Attempting to open in new tab as fallback:', imgElement.src);
+            }, 1000);
         }
 
         function previousPhoto() {

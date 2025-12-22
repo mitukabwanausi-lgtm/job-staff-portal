@@ -31,6 +31,8 @@
             background: rgba(0, 0, 0, 0.95);
             z-index: 1000;
             overflow: auto;
+            align-items: center;
+            justify-content: center;
         }
 
         .photo-gallery.active {
@@ -41,6 +43,7 @@
             max-width: 90%;
             max-height: 90vh;
             object-fit: contain;
+            border-radius: 8px;
         }
 
         .material-icons {
@@ -238,6 +241,12 @@
                 if (error) throw error;
 
                 jobs = data || [];
+
+                // Debug: Check photo URLs
+                jobs.forEach((job, index) => {
+                    console.log(`Job ${index + 1}:`, job.id, 'Photo URLs:', job.photo_urls);
+                });
+
                 updateLastRefreshTime();
                 return jobs;
             } catch (error) {
@@ -245,7 +254,6 @@
                 return [];
             }
         }
-
         // ==================== JOB OPERATIONS ====================
         async function startJob(jobId) {
             try {
@@ -318,7 +326,37 @@
         }
 
         // ==================== PHOTO GALLERY ====================
+
+        function handleViewPhotos(jobId) {
+            // Find the job in the current jobs array
+            const job = jobs.find(j => j.id === jobId);
+
+            if (!job) {
+                alert('Job not found.');
+                return;
+            }
+
+            console.log('Job found:', job);
+            console.log('Photo URLs:', job.photo_urls);
+
+            // Check if photo_urls exists and is an array
+            if (!job.photo_urls || !Array.isArray(job.photo_urls)) {
+                console.error('Photo URLs is not an array or is undefined:', job.photo_urls);
+                alert('No photos available for this job.');
+                return;
+            }
+
+            if (job.photo_urls.length === 0) {
+                alert('No photos available for this job.');
+                return;
+            }
+
+            openPhotoGallery(job.photo_urls);
+        }
+
         function openPhotoGallery(photoUrls) {
+            console.log('Opening gallery with URLs:', photoUrls);
+
             if (!photoUrls || photoUrls.length === 0) {
                 alert('No photos available for this job.');
                 return;
@@ -326,7 +364,7 @@
 
             currentPhotos = photoUrls.map(url => {
                 // Convert Google Drive share links to direct image links
-                if (url.includes('drive.google.com/file/d/')) {
+                if (url && url.includes('drive.google.com/file/d/')) {
                     const match = url.match(/\/d\/([^/]+)/);
                     if (match) {
                         const fileId = match[1];
@@ -334,7 +372,12 @@
                     }
                 }
                 return url;
-            });
+            }).filter(url => url); // Filter out any null/undefined URLs
+
+            if (currentPhotos.length === 0) {
+                alert('No valid photo URLs found.');
+                return;
+            }
 
             currentPhotoIndex = 0;
             displayPhoto();
@@ -579,13 +622,11 @@
                         ` : ''}
 
                         ${job.photo_urls && job.photo_urls.length > 0 ? `
-                            <div onclick="console.log('Photo URLs:', ${JSON.stringify(job.photo_urls)}); console.log('Type:', typeof ${JSON.stringify(job.photo_urls)});">
-                                <button onclick="openPhotoGallery(${JSON.stringify(job.photo_urls)})"
-                                    class="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
-                                    <span class="material-icons">photo_library</span>
-                                    View Photos
-                                </button>
-                            </div>
+                            <button onclick="handleViewPhotos('${job.id}')"
+                                class="flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium transition-colors">
+                                <span class="material-icons">photo_library</span>
+                                View Photos
+                            </button>
                         ` : `
                             <div class="flex items-center justify-center gap-2 px-4 py-2 bg-gray-300 text-gray-500 rounded-lg font-medium cursor-not-allowed">
                                 <span class="material-icons">hide_image</span>

@@ -303,12 +303,16 @@
 
         // FIXED: Improved job completion with proper state management
         async function submitCompletion(event) {
+            // Prevent default if event exists (for form submission safety)
+            if (event) event.preventDefault();
+
             // Prevent double submission
             if (isSubmittingCompletion) {
                 console.log('Submission already in progress');
                 return;
             }
 
+            // 1. Validate Inputs FIRST
             const amountPaid = document.getElementById('amountPaid').value;
             const paymentMethod = document.querySelector('input[name="paymentMethod"]:checked').value;
             const requestReview = document.getElementById('requestReview').checked;
@@ -324,17 +328,18 @@
                 return;
             }
 
-            // Set submission flag and disable button
+            // 2. Set Loading State (LOCK UI)
             isSubmittingCompletion = true;
             const submitButton = document.getElementById('completeJobButton');
             const originalText = submitButton.innerHTML;
             submitButton.disabled = true;
             submitButton.innerHTML = '<span class="material-icons spin">sync</span> Processing...';
+            submitButton.classList.add('opacity-75');
 
+            // 3. Attempt Database Update (ONLY ONE ASYNC OPERATION)
             try {
-                console.log('Starting job completion for job:', pendingCompletionJob.id);
+                console.log('Completing job:', pendingCompletionJob.id);
 
-                // Single update with all fields
                 const {data, error} = await supabaseClient
                     .from('jobs')
                     .update({
@@ -345,41 +350,47 @@
                         actual_end_time: new Date().toISOString()
                     })
                     .eq('id', pendingCompletionJob.id)
-                    .select()
+                    .select() // Get the updated record back
                     .single();
 
-                if (error) {
-                    console.error('Database error:', error);
-                    throw error;
-                }
+                if (error) throw error;
 
-                console.log('Job completed successfully:', data);
+                console.log('Job marked as completed in database:', data);
 
-                // Show success message
-                alert('Job completed successfully!');
+                // 4. ON SUCCESS: Update Local State & UI
+                // Remove the completed job from the local array
+                const jobId = pendingCompletionJob.id;
+                jobs = jobs.filter(j => j.id !== jobId);
 
-                // Remove the completed job from the jobs array immediately
-                jobs = jobs.filter(j => j.id !== pendingCompletionJob.id);
+                // Show success feedback
+                alert('✓ Job completed successfully!');
 
-                // Close modal
+                // Close the payment modal IMMEDIATELY
                 closePaymentModal();
 
-                // Render updated view (without the completed job)
+                // Re-render the app WITHOUT the completed job
                 renderApp();
 
-                // Optional: Reload in background to sync any other changes
-                loadJobs();
+                // (Optional) Trigger a background refresh to ensure sync
+                setTimeout(() => loadJobs(), 1000);
 
             } catch (error) {
-                console.error('Error completing job:', error);
-                alert('Failed to complete job: ' + error.message + '\n\nPlease try again or contact support if the problem persists.');
+                console.error('❌ Error completing job:', error);
 
-                // Re-enable button on error
+                // 5. ON ERROR: Clear UI Lock and Show Error
+                alert('Failed to complete job: ' + error.message + '\n\nPlease try again.');
+
+                // RESET the submission state to allow retry
+                isSubmittingCompletion = false;
                 submitButton.disabled = false;
                 submitButton.innerHTML = originalText;
+                submitButton.classList.remove('opacity-75');
+
+                // DO NOT close the modal - let user retry with their data still visible
+
             } finally {
-                // Always reset the submission flag
-                isSubmittingCompletion = false;
+                // 6. Cleanup: The isSubmittingCompletion flag is reset in BOTH success (closePaymentModal) and error paths above.
+                // No additional cleanup needed here.
             }
         }
 

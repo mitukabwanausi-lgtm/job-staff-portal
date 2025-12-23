@@ -269,7 +269,18 @@
 
                 if (error) throw error;
 
-                await loadJobs();
+                // Update the job in the local array immediately
+                const jobIndex = jobs.findIndex(j => j.id === jobId);
+                if (jobIndex !== -1) {
+                    jobs[jobIndex].status = 'In Progress';
+                    jobs[jobIndex].actual_start_time = new Date().toISOString();
+                }
+
+                // Re-render the view immediately
+                renderApp();
+
+                // Reload jobs in background to sync
+                loadJobs();
             } catch (error) {
                 console.error('Error starting job:', error);
                 alert('Failed to start job. Please try again.');

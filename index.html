@@ -347,14 +347,17 @@
                 // Show success message
                 alert('Job completed successfully!');
 
-                // Close modal first
+                // Remove the completed job from the jobs array immediately
+                jobs = jobs.filter(j => j.id !== pendingCompletionJob.id);
+
+                // Close modal
                 closePaymentModal();
 
-                // Then reload jobs
-                await loadJobs();
-
-                // Render updated view
+                // Render updated view (without the completed job)
                 renderApp();
+
+                // Optional: Reload in background to sync any other changes
+                loadJobs();
 
             } catch (error) {
                 console.error('Error completing job:', error);
